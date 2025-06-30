@@ -277,13 +277,13 @@ int test_tmask() {
 
 	int num_threads = std::min(vx_num_threads(), 8);
 	int tid = 0;
+	
+	do {
+		int tmask = make_select_tmask(tid);
+		vx_tmc(tmask);
+		tid = do_tmask();
+	} while (tid < num_threads);
 
-l_start:
-	int tmask = make_select_tmask(tid);
-	vx_tmc(tmask);
-	tid = do_tmask();
-	if (tid < num_threads)
-		goto l_start;
 	vx_tmc_one();
 
 	return check_error(tmask_buffer, 0, num_threads);
