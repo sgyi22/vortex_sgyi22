@@ -19,7 +19,8 @@
 `include "VX_types.vh"
 
 ///////////////////////////////////////////////////////////////////////////////
-
+// parameter definitions
+// bit widths
 `define NW_BITS         `CLOG2(`NUM_WARPS)
 `define NC_WIDTH        `UP(`NC_BITS)
 
@@ -46,7 +47,7 @@
 
 `define DV_STACK_SIZE   `UP(`NUM_THREADS-1)
 `define DV_STACK_SIZEW  `UP(`CLOG2(`DV_STACK_SIZE))
-
+// performance counter bit width ?
 `define PERF_CTR_BITS   44
 
 `ifndef NDEBUG
@@ -86,7 +87,7 @@
 `define SFU_WIDTH       `UP(`SFU_BITS)
 
 ///////////////////////////////////////////////////////////////////////////////
-
+// instruction opcodes
 `define INST_LUI        7'b0110111
 `define INST_AUIPC      7'b0010111
 `define INST_JAL        7'b1101111
@@ -156,7 +157,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 `define INST_ALU_ADD         4'b0000
-//`define INST_ALU_UNUSED    4'b0001
+`define INST_ALU_DOT8        4'b0001 //`define INST_ALU_UNUSED    4'b0001
 `define INST_ALU_LUI         4'b0010
 `define INST_ALU_AUIPC       4'b0011
 `define INST_ALU_SLTU        4'b0100
@@ -285,7 +286,7 @@
 `define ARB_SEL_BITS(I, O)  ((I > O) ? `CLOG2(`CDIV(I, O)) : 0)
 
 ///////////////////////////////////////////////////////////////////////////////
-
+// Cache and Memory configuration
 `define CACHE_MEM_TAG_WIDTH(mshr_size, num_banks, mem_ports, uuid_width) \
         (uuid_width + `CLOG2(mshr_size) + `CLOG2(`CDIV(num_banks, mem_ports)))
 
@@ -339,7 +340,7 @@
 `define TO_FULL_ADDR(x)         {x, (`MEM_ADDR_WIDTH-$bits(x))'(0)}
 
 ///////////////////////////////////////////////////////////////////////////////
-
+// Macro for common operations 
 `define NEG_EDGE(dst, src) \
     VX_edge_trigger #( \
         .POS  (0), \
@@ -489,6 +490,7 @@
     end \
     /* verilator lint_on GENUNNAMED */
 
+// Performance Monitoring
 `define PERF_COUNTER_ADD(dst, src, field, width, count, reg_enable) \
     /* verilator lint_off GENUNNAMED */ \
     if (count > 1) begin \

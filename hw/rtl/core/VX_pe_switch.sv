@@ -38,6 +38,7 @@ module VX_pe_switch import VX_gpu_pkg::*; #(
     wire [PE_COUNT-1:0][REQ_DATAW-1:0] pe_req_data;
     wire [PE_COUNT-1:0] pe_req_ready;
 
+    // The VX_stream_switch is a 1-to-N demultiplexer that routes data to exactly one output based on sel_in.
     VX_stream_switch #(
         .DATAW       (REQ_DATAW),
         .NUM_INPUTS  (1),
@@ -54,6 +55,17 @@ module VX_pe_switch import VX_gpu_pkg::*; #(
         .valid_out (pe_req_valid),
         .ready_out (pe_req_ready)
     );
+
+    // For DOT8 instruction (pe_sel = 2):
+    // pe_req_valid[0] = 0;        // execute_out_if[0] inactive
+    // pe_req_valid[1] = 0;        // execute_out_if[1] inactive  
+    // pe_req_valid[2] = 1;        // execute_out_if[2] active (DOT8)
+    // pe_req_valid[3] = 0;        // execute_out_if[3] inactive (if exists)
+
+    // pe_req_data[0] = 'x;        // No data routed to index 0
+    // pe_req_data[1] = 'x;        // No data routed to index 1
+    // pe_req_data[2] = execute_in_if.data;  // DOT8 instruction data
+    // pe_req_data[3] = 'x;        // No data routed to index 3
 
     for (genvar i = 0; i < PE_COUNT; ++i) begin : g_execute_out_if
         assign execute_out_if[i].valid = pe_req_valid[i];

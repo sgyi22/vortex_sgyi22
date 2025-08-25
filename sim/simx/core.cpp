@@ -181,7 +181,7 @@ void Core::reset() {
   perf_stats_ = PerfStats();
 }
 
-void Core::tick() {
+void Core::tick() { // advance the simulation of a single core by one clock cycle
   this->commit();
   this->execute();
   this->issue();
@@ -195,6 +195,7 @@ void Core::tick() {
 
 void Core::schedule() {
   auto trace = emulator_.step();
+
   if (trace == nullptr) {
     ++perf_stats_.sched_idle;
     return;
@@ -208,6 +209,10 @@ void Core::schedule() {
   // advance to fetch stage
   fetch_latch_.push(trace);
   ++pending_instrs_;
+  
+  // track active threads
+  perf_stats_.total_issued_warps += 1;
+  perf_stats_.total_active_threads += trace->tmask.count();
 }
 
 void Core::fetch() {

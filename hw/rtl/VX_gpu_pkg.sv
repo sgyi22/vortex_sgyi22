@@ -93,6 +93,8 @@ package VX_gpu_pkg;
     typedef struct packed {
         logic [`PERF_CTR_BITS-1:0] idles;
         logic [`PERF_CTR_BITS-1:0] stalls;
+        logic [`PERF_CTR_BITS-1:0] total_issued_warps; // total warps issued
+        logic [`PERF_CTR_BITS-1:0] total_active_threads; // total threads issued
     } sched_perf_t;
 
     typedef struct packed {
@@ -136,7 +138,7 @@ package VX_gpu_pkg;
     typedef struct packed {
         logic [($bits(alu_args_t)-`INST_FRM_BITS-`INST_FMT_BITS)-1:0] __padding;
         logic [`INST_FRM_BITS-1:0] frm;
-        logic [`INST_FMT_BITS-1:0] fmt;
+        logic [`INST_FMT_BITS-1:0] fmt; // fmt[0] = 0: single precision (.S) vs 1: double precision (.D) // fmt[1] = 0: ADD vs 1: SUB
     } fpu_args_t;
 
     typedef struct packed {
@@ -465,6 +467,19 @@ package VX_gpu_pkg;
                             default:       `TRACE(level, ("?"))
                         endcase
                     end
+                end
+                `ALU_TYPE_OTHER: begin  // Added for custom instruction (DOT8)
+                    case (`INST_ALU_BITS'(op_type))
+                        `INST_ALU_DOT8: `TRACE(level, ("DOT8"))
+                        default: `TRACE(level, ("?"))
+                        // default: begin
+                        //     case (op_type[2])
+                        //         1'b0: `TRACE(level, ("VOTE"))     // VOTE instructions
+                        //         1'b1: `TRACE(level, ("SHFL"))     // SHFL instructions
+                        //         default: `TRACE(level, ("?"))
+                        //     endcase
+                        // end
+                    endcase
                 end
                 default: `TRACE(level, ("?"))
             endcase

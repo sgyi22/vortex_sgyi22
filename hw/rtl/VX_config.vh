@@ -31,6 +31,11 @@
 `endif
 
 ///////////////////////////////////////////////////////////////////////////////
+// For Custom DOT8 Extension
+`ifndef EXT_CUS_DISABLE
+`define EXT_CUS_ENABLE
+`endif
+
 `ifndef EXT_M_DISABLE
 `define EXT_M_ENABLE
 `endif
@@ -438,6 +443,11 @@
 `ifndef LATENCY_IMUL
 `define LATENCY_IMUL 4
 `endif
+`endif
+
+// For custom instruction dot8 [TODO:] Who uses this latency? Why is it needed?
+`ifndef LATENCY_DOT8
+`define LATENCY_DOT8 2
 `endif
 
 // Floating-Point Units ///////////////////////////////////////////////////////
@@ -850,6 +860,13 @@
     `define EXT_M_ENABLED   1
 `else
     `define EXT_M_ENABLED   0
+`endif
+
+// For Custom DOT8 Extension
+`ifdef EXT_CUS_ENABLE
+    `define EXT_CUS_ENABLED   1
+`else
+    `define EXT_CUS_ENABLED   0
 `endif
 
 `ifdef EXT_V_ENABLE

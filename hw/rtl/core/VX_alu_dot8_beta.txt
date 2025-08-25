@@ -1,0 +1,40 @@
+
+// Cursor
+// wire [`XLEN-1:0] a = pe_data_in[i][0 +: `XLEN];
+//         wire [`XLEN-1:0] b = pe_data_in[i][`XLEN +: `XLEN];
+        
+//         // Extract 4 int8 values from each input register
+//         wire [7:0] a0 = a[7:0];    // First int8 from register a
+//         wire [7:0] a1 = a[15:8];   // Second int8 from register a
+//         wire [7:0] a2 = a[23:16];  // Third int8 from register a
+//         wire [7:0] a3 = a[31:24];  // Fourth int8 from register a
+        
+//         wire [7:0] b0 = b[7:0];    // First int8 from register b
+//         wire [7:0] b1 = b[15:8];   // Second int8 from register b
+//         wire [7:0] b2 = b[23:16];  // Third int8 from register b
+//         wire [7:0] b3 = b[31:24];  // Fourth int8 from register b
+        
+//         // Compute individual products: a0*b0, a1*b1, a2*b2, a3*b3
+//         wire [15:0] prod0 = a0 * b0;  // 8-bit × 8-bit = 16-bit result
+//         wire [15:0] prod1 = a1 * b1;
+//         wire [15:0] prod2 = a2 * b2;
+//         wire [15:0] prod3 = a3 * b3;
+        
+//         // Sum the products in a tree structure to minimize critical path
+//         wire [16:0] sum01 = prod0 + prod1;  // 16-bit + 16-bit = 17-bit result
+//         wire [16:0] sum23 = prod2 + prod3;
+//         wire [17:0] result_temp = sum01 + sum23;  // 17-bit + 17-bit = 18-bit result
+        
+//         // Create XLEN-width result with proper sign extension
+//         wire [`XLEN-1:0] result;
+//         `ifdef XLEN_64
+//             // For 64-bit: sign extend the 32-bit result to 64 bits
+//             assign result = {{32{result_temp[17]}}, result_temp[17:0]};
+//         `else
+//             // For 32-bit: use the result directly (truncate to 32 bits)
+//             assign result = result_temp[31:0];
+//         `endif
+        
+//         // Buffer the result for the specified latency
+//         `BUFFER_EX(result, c, pe_enable, 1, LATENCY_DOT8);
+//         assign pe_data_out[i] = result;

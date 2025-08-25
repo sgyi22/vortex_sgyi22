@@ -1,0 +1,9 @@
+main.o: /home/sgyi22/vortex/tests/opencl/vecadd/main.cc \
+ /home/sgyi22/tools/pocl/include/CL/opencl.h \
+ /home/sgyi22/tools/pocl/include/CL/cl.h \
+ /home/sgyi22/tools/pocl/include/CL/cl_version.h \
+ /home/sgyi22/tools/pocl/include/CL/cl_platform.h \
+ /home/sgyi22/tools/pocl/include/CL/cl_gl.h \
+ /home/sgyi22/tools/pocl/include/CL/cl_ext.h \
+ /home/sgyi22/tools/pocl/include/CL/cl_ext_pocl.h \
+ /home/sgyi22/vortex/tests/opencl/vecadd/common.h

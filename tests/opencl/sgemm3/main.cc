@@ -8,6 +8,10 @@
 #include <chrono>
 #include <vector>
 #include "common.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
 
 #define FLOAT_ULP 6
 
@@ -185,6 +189,30 @@ int main (int argc, char **argv) {
   // Getting platform and device information
   CL_CHECK(clGetPlatformIDs(1, &platform_id, NULL));
   CL_CHECK(clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1, &device_id, NULL));
+
+  // Query device capabilities to understand work group size limits
+  size_t max_work_group_size;
+  CL_CHECK(clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_work_group_size), &max_work_group_size, NULL));
+  printf("Device max work group size: %zu\n", max_work_group_size);
+  
+  size_t max_work_item_sizes[3];
+  CL_CHECK(clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(max_work_item_sizes), max_work_item_sizes, NULL));
+  printf("Device max work item sizes: [%zu, %zu, %zu]\n", max_work_item_sizes[0], max_work_item_sizes[1], max_work_item_sizes[2]);
+
+  // Validate tile size against device limits
+  size_t requested_work_group_size = tile_size * tile_size;
+  if (requested_work_group_size > max_work_group_size) {
+    printf("Error: Requested work group size %zu (tile_size=%d x %d) exceeds device limit %zu\n", 
+           requested_work_group_size, tile_size, tile_size, max_work_group_size);
+    printf("Please reduce tile size to %d or smaller\n", (int)sqrt(max_work_group_size));
+    return -1;
+  }
+  
+  if (tile_size > max_work_item_sizes[0] || tile_size > max_work_item_sizes[1]) {
+    printf("Error: Tile size %d exceeds device work item size limits [%zu, %zu]\n", 
+           tile_size, max_work_item_sizes[0], max_work_item_sizes[1]);
+    return -1;
+  }
 
   printf("Create context\n");
   context = CL_CHECK2(clCreateContext(NULL, 1, &device_id, NULL, NULL,  &_err));

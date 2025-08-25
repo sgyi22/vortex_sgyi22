@@ -42,7 +42,7 @@ add_option() {
 
 DEFAULTS() {
     DRIVER=simx
-    APP=sgemm
+    APP=linear
     DEBUG=0
     DEBUG_LEVEL=0
     SCOPE=0

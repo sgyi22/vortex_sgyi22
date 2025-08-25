@@ -14,7 +14,8 @@
 `ifndef VX_TYPES_VH
 `define VX_TYPES_VH
 
-// Device configuration registers /////////////////////////////////////////////
+// Device configuration registers (DCR) /////////////////////////////////////////////
+// These are registers software uses to configure the GPU (e.g., set startup kernel address, arguments, performance monitoring class). //
 
 `define VX_CSR_ADDR_BITS                12
 `define VX_DCR_ADDR_BITS                12
@@ -31,10 +32,11 @@
 `define VX_DCR_BASE_STATE_COUNT         (`VX_DCR_BASE_STATE_END-`VX_DCR_BASE_STATE_BEGIN)
 
 // Machine Performance-monitoring counters classes ////////////////////////////
-
 `define VX_DCR_MPM_CLASS_NONE           0
 `define VX_DCR_MPM_CLASS_CORE           1
 `define VX_DCR_MPM_CLASS_MEM            2
+// warp efficiency MPM class @sgyi22
+`define VX_DCR_MPM_CLASS_3              3
 
 // User Floating-Point CSRs ///////////////////////////////////////////////////
 
@@ -66,6 +68,8 @@
 `define VX_CSR_MPM_USER_H               12'hB83
 
 // Machine Performance-monitoring core counters (Standard) ////////////////////
+// XLEN = 32 means 32 bit wide GPR. CSR are 32 bit wides. Counters are 64 bit wide, so they are split into two 32 bit CSRs: lower and upper.
+// the addresses are of each CSR (not continuous memory like in DRAM, instead it is register-mapped).
 
 `define VX_CSR_MCYCLE                   12'hB00
 `define VX_CSR_MCYCLE_H                 12'hB80
@@ -181,6 +185,14 @@
 
 // Machine Performance-monitoring memory counters (class 3) ///////////////////
 // <Add your own counters: use addresses hB03..B1F, hB83..hB9F>
+// warp-efficiency perf counters @sgyi22
+// counters are always 64 bits wide, = 8 bytes used. 
+// in XLEN = 32 -> 4 bytes at lower addr CSR, 4 bytes of upper CSR (_H) is used,
+// in XLEN = 64 -> 8 bytes of lower addr CSR can be used (each register is 64 bits wide).
+`define VX_CSR_MPM_TOTAL_ISSUED_WARPS     12'hB03 // addresses for CSR
+`define VX_CSR_MPM_TOTAL_ISSUED_WARPS_H   12'hB83
+`define VX_CSR_MPM_TOTAL_ACTIVE_THREADS   12'hB04
+`define VX_CSR_MPM_TOTAL_ACTIVE_THREADS_H 12'hB84
 
 // Machine Information Registers //////////////////////////////////////////////
 

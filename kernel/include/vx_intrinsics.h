@@ -303,6 +303,20 @@ inline void vx_matrix_mul()
     __asm__ volatile (".insn i 0x7b, 2, x0, 0(x0)");
 }
 
+// DOT8 - 4x4 int8 dot product (CUSTOM)
+// R-type - Register type - Arithmetic / Logical instr
+// opcode - 0x0B aka RISCV_CUSTOM0
+// funct7 - 
+// :: - separates the output operands from the input operands
+// e.g. instruction_code : output : input
+inline int vx_dot8(int a, int b)
+{
+    size_t ret;
+    // R type: .insn r opcode7, funct3, funct7, rd, rs1, rs2
+    __asm__ volatile (".insn r %1, 0, 1, %0, %2, %3" : "=r"(ret) : "i"(RISCV_CUSTOM0), "r"(a), "r"(b));
+    return ret;
+}
+
 #ifdef __cplusplus
 }
 #endif

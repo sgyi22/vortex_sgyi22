@@ -13,6 +13,7 @@
 
 `include "VX_define.vh"
 
+// INSTANCE_ID for debugging, CORE_ID for core identification
 module VX_schedule import VX_gpu_pkg::*; #(
     parameter `STRING INSTANCE_ID = "",
     parameter CORE_ID = 0
@@ -21,7 +22,7 @@ module VX_schedule import VX_gpu_pkg::*; #(
     input wire              reset,
 
 `ifdef PERF_ENABLE
-    output sched_perf_t     sched_perf,
+    output sched_perf_t     sched_perf, // from VX_gpu_pkg.sv
 `endif
 
     // configuration
@@ -41,16 +42,17 @@ module VX_schedule import VX_gpu_pkg::*; #(
     VX_sched_csr_if.master  sched_csr_if,
 
     // status
-    output wire             busy
+    output wire             busy // whether scheduler is active
 );
     `UNUSED_SPARAM (INSTANCE_ID)
     `UNUSED_PARAM (CORE_ID)
 
+    // TODO: Why active_warps_n ? What does _n do? Guessing it is for NEXT state logic.
     reg [`NUM_WARPS-1:0] active_warps, active_warps_n; // updated when a warp is activated or disabled
     reg [`NUM_WARPS-1:0] stalled_warps, stalled_warps_n;  // set when branch/gpgpu instructions are issued
 
-    reg [`NUM_WARPS-1:0][`NUM_THREADS-1:0] thread_masks, thread_masks_n;
-    reg [`NUM_WARPS-1:0][`PC_BITS-1:0] warp_pcs, warp_pcs_n;
+    reg [`NUM_WARPS-1:0][`NUM_THREADS-1:0] thread_masks, thread_masks_n; // thread masks for each warp, used to track active threads
+    reg [`NUM_WARPS-1:0][`PC_BITS-1:0] warp_pcs, warp_pcs_n; // program counters for each warp
 
     wire [`NW_WIDTH-1:0]    schedule_wid;
     wire [`NUM_THREADS-1:0] schedule_tmask;
@@ -69,7 +71,7 @@ module VX_schedule import VX_gpu_pkg::*; #(
     reg [`PERF_CTR_BITS-1:0] cycles;
 
     wire schedule_fire = schedule_valid && schedule_ready;
-    wire schedule_if_fire = schedule_if.valid && schedule_if.ready;
+    wire schedule_if_fire = schedule_if.valid && schedule_if.ready; // a warp was selected by scheduler and fetch unit accepts
 
     // branch
     wire [`NUM_ALU_BLOCKS-1:0]                  branch_valid;
@@ -111,17 +113,19 @@ module VX_schedule import VX_gpu_pkg::*; #(
         barrier_stalls_n= barrier_stalls;
         warp_pcs_n      = warp_pcs;
 
-        // decode unlock
+        //  UPDATE state of active / stalled warps
+
+        // decode unlock - warp is unlocked when the decode stage schedules it
         if (decode_sched_if.valid && decode_sched_if.unlock) begin
             stalled_warps_n[decode_sched_if.wid] = 0;
         end
 
-        // CSR unlock
+        // CSR unlock - warp is unlocked via a CSR operation (unlock_warp)
         if (sched_csr_if.unlock_warp) begin
             stalled_warps_n[sched_csr_if.unlock_wid] = 0;
         end
 
-        // wspawn handling
+        // wspawn handling - activates new warps and initializes their PC & thread masks
         if (wspawn.valid && is_single_warp) begin
             active_warps_n |= wspawn.wmask;
             for (integer i = 0; i < `NUM_WARPS; ++i) begin
@@ -133,14 +137,14 @@ module VX_schedule import VX_gpu_pkg::*; #(
             stalled_warps_n[wspawn_wid] = 0; // unlock warp
         end
 
-        // TMC handling
+        // TMC handling - Updates the thread mask for a warp.
         if (warp_ctl_if.valid && warp_ctl_if.tmc.valid) begin
             active_warps_n[warp_ctl_if.wid]  = (warp_ctl_if.tmc.tmask != 0);
             thread_masks_n[warp_ctl_if.wid]  = warp_ctl_if.tmc.tmask;
             stalled_warps_n[warp_ctl_if.wid] = 0; // unlock warp
         end
 
-        // split handling
+        // split handling - Handles divergent and convergent execution paths for warps.
         if (warp_ctl_if.valid && warp_ctl_if.split.valid) begin
             if (warp_ctl_if.split.is_dvg) begin
                 thread_masks_n[warp_ctl_if.wid] = warp_ctl_if.split.then_tmask;
@@ -412,6 +416,8 @@ module VX_schedule import VX_gpu_pkg::*; #(
 `ifdef PERF_ENABLE
     reg [`PERF_CTR_BITS-1:0] perf_sched_idles;
     reg [`PERF_CTR_BITS-1:0] perf_sched_stalls;
+    reg [`PERF_CTR_BITS-1:0] perf_total_issued_warps; // warp efficiency
+    reg [`PERF_CTR_BITS-1:0] perf_total_active_threads; // warp efficiency
 
     wire schedule_idle = ~schedule_valid;
     wire schedule_stall = schedule_if.valid && ~schedule_if.ready;
@@ -420,14 +426,22 @@ module VX_schedule import VX_gpu_pkg::*; #(
         if (reset) begin
             perf_sched_idles  <= '0;
             perf_sched_stalls <= '0;
+            perf_total_issued_warps <= 0;
+            perf_total_active_threads <= 0;
         end else begin
             perf_sched_idles  <= perf_sched_idles + `PERF_CTR_BITS'(schedule_idle);
             perf_sched_stalls <= perf_sched_stalls + `PERF_CTR_BITS'(schedule_stall);
+            if (schedule_if_fire) begin
+                perf_total_issued_warps <= perf_total_issued_warps + 1;
+                perf_total_active_threads <= perf_total_active_threads + $countones(schedule_if.data.tmask);
+            end
         end
     end
 
     assign sched_perf.idles = perf_sched_idles;
     assign sched_perf.stalls = perf_sched_stalls;
+    assign sched_perf.total_issued_warps = perf_total_issued_warps;
+    assign sched_perf.total_active_threads = perf_total_active_threads;
 `endif
 
 endmodule

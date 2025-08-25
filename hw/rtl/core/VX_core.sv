@@ -31,14 +31,14 @@ module VX_core import VX_gpu_pkg::*; #(
     input sysmem_perf_t     sysmem_perf,
 `endif
 
-    VX_dcr_bus_if.slave     dcr_bus_if,
+    VX_dcr_bus_if.slave     dcr_bus_if, // Device Configuration Register Bus Interface
 
-    VX_mem_bus_if.master    dcache_bus_if [DCACHE_NUM_REQS],
+    VX_mem_bus_if.master    dcache_bus_if [DCACHE_NUM_REQS], // Data Cache 
 
-    VX_mem_bus_if.master    icache_bus_if,
+    VX_mem_bus_if.master    icache_bus_if, // Instruction cache
 
 `ifdef GBAR_ENABLE
-    VX_gbar_bus_if.master   gbar_bus_if,
+    VX_gbar_bus_if.master   gbar_bus_if, // Global barrier
 `endif
 
     // Status
@@ -78,15 +78,23 @@ module VX_core import VX_gpu_pkg::*; #(
 
     base_dcrs_t base_dcrs;
 
+    // 1. Configuration
+    // S1: DCR configuration storage
     VX_dcr_data dcr_data (
         .clk        (clk),
         .reset      (reset),
-        .dcr_bus_if (dcr_bus_if),
-        .base_dcrs  (base_dcrs)
+        .dcr_bus_if (dcr_bus_if), // Receives DCR write from host
+        .base_dcrs  (base_dcrs) // Provides configuration to piepline
     );
 
     `SCOPE_IO_SWITCH (3);
 
+    // 2. Pipeline Stages
+    // S2: Warp Scheduling
+    // Warp Selection: Scheduler selects which warp to execute next
+    // Thread Masks: Manages active threads within each warp
+    // Branch Control: Handles conditional execution and branches
+    // Barrier Synchronization: Manages global barriers between cores
     VX_schedule #(
         .INSTANCE_ID (`SFORMATF(("%s-schedule", INSTANCE_ID))),
         .CORE_ID (CORE_ID)
@@ -98,34 +106,44 @@ module VX_core import VX_gpu_pkg::*; #(
         .sched_perf     (pipeline_perf.sched),
     `endif
 
-        .base_dcrs      (base_dcrs),
+        .base_dcrs      (base_dcrs), // core configuration
 
-        .warp_ctl_if    (warp_ctl_if),
-        .branch_ctl_if  (branch_ctl_if),
+        .warp_ctl_if    (warp_ctl_if), // warp control signals
+        .branch_ctl_if  (branch_ctl_if), // branch control signals
 
         .decode_sched_if(decode_sched_if),
-        .commit_sched_if(commit_sched_if),
+        .commit_sched_if(commit_sched_if), 
 
-        .schedule_if    (schedule_if),
+        .schedule_if    (schedule_if), // outputs selected warp
     `ifdef GBAR_ENABLE
-        .gbar_bus_if    (gbar_bus_if),
+        .gbar_bus_if    (gbar_bus_if), // global barrier interface
     `endif
         .sched_csr_if   (sched_csr_if),
 
-        .busy           (busy)
+        .busy           (busy) // core busy status
     );
-
+    
+    // S3: Instruction Fetch
+    // PC Generation: Generates program counter for selected warp
+    // Cache Request: Requests instructions from I-cache
+    // Instruction Buffer: Buffers fetched instructions
+    // Tag Tracking: Tracks instruction requests and responses
     VX_fetch #(
         .INSTANCE_ID (`SFORMATF(("%s-fetch", INSTANCE_ID)))
     ) fetch (
         `SCOPE_IO_BIND  (0)
         .clk            (clk),
         .reset          (reset),
-        .icache_bus_if  (icache_bus_if),
-        .schedule_if    (schedule_if),
+        .icache_bus_if  (icache_bus_if), // instruction cache interface
+        .schedule_if    (schedule_if), 
         .fetch_if       (fetch_if)
     );
 
+    // S4: Instruction Decode
+    // Instruction Parsing: Decodes RISC-V instructions
+    // Operand Extraction: Extracts register operands
+    // Execution Unit Assignment: Determines ALU/LSU/FPU/SFU
+    // Dependency Analysis: Identifies data dependencies
     VX_decode #(
         .INSTANCE_ID (`SFORMATF(("%s-decode", INSTANCE_ID)))
     ) decode (
@@ -133,9 +151,14 @@ module VX_core import VX_gpu_pkg::*; #(
         .reset          (reset),
         .fetch_if       (fetch_if),
         .decode_if      (decode_if),
-        .decode_sched_if(decode_sched_if)
+        .decode_sched_if(decode_sched_if) // feedback to scheduler
     );
 
+    // S5: Instruction Issue
+    // Scoreboard Checking: Verifies operand availability
+    // Issue Arbitration: Selects instructions for dispatch
+    // Register Renaming: Manages register dependencies
+    // Dispatch Routing: Routes to appropriate execution units
     VX_issue #(
         .INSTANCE_ID (`SFORMATF(("%s-issue", INSTANCE_ID)))
     ) issue (
@@ -148,11 +171,12 @@ module VX_core import VX_gpu_pkg::*; #(
         .issue_perf     (pipeline_perf.issue),
     `endif
 
-        .decode_if      (decode_if),
-        .writeback_if   (writeback_if),
-        .dispatch_if    (dispatch_if)
+        .decode_if      (decode_if), // input from decode
+        .writeback_if   (writeback_if), // writeback from commit
+        .dispatch_if    (dispatch_if) // output to execute units
     );
 
+    // S6: Execute
     VX_execute #(
         .INSTANCE_ID (`SFORMATF(("%s-execute", INSTANCE_ID))),
         .CORE_ID (CORE_ID)
@@ -169,10 +193,10 @@ module VX_core import VX_gpu_pkg::*; #(
 
         .base_dcrs      (base_dcrs),
 
-        .lsu_mem_if     (lsu_mem_if),
+        .lsu_mem_if     (lsu_mem_if), // mem interface
 
-        .dispatch_if    (dispatch_if),
-        .commit_if      (commit_if),
+        .dispatch_if    (dispatch_if), // input from issue
+        .commit_if      (commit_if), // output to commit
 
         .commit_csr_if  (commit_csr_if),
         .sched_csr_if   (sched_csr_if),
@@ -181,6 +205,11 @@ module VX_core import VX_gpu_pkg::*; #(
         .branch_ctl_if  (branch_ctl_if)
     );
 
+    // S7: Commit
+    // Result Commitment: Writes results to register file
+    // CSR Updates: Updates control/status registers
+    // Scheduler Feedback: Notifies scheduler of completion
+    // Writeback: Provides results for dependent instructions
     VX_commit #(
         .INSTANCE_ID (`SFORMATF(("%s-commit", INSTANCE_ID)))
     ) commit (
@@ -195,6 +224,12 @@ module VX_core import VX_gpu_pkg::*; #(
         .commit_sched_if(commit_sched_if)
     );
 
+    // 3. Memory Units
+    // S8: Memory Operations
+    // Memory Coalescing: Combines multiple memory requests
+    // Address Translation: Handles memory addressing
+    // Cache Interface: Manages D-cache requests/responses
+    // Local Memory: Handles local memory operations
     VX_mem_unit #(
         .INSTANCE_ID (INSTANCE_ID)
     ) mem_unit (
@@ -204,8 +239,8 @@ module VX_core import VX_gpu_pkg::*; #(
         .lmem_perf     (lmem_perf),
         .coalescer_perf(coalescer_perf),
     `endif
-        .lsu_mem_if    (lsu_mem_if),
-        .dcache_bus_if (dcache_bus_if)
+        .lsu_mem_if    (lsu_mem_if), // input from LSU units
+        .dcache_bus_if (dcache_bus_if) // output to data cache
     );
 
 `ifdef PERF_ENABLE

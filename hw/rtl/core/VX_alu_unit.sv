@@ -31,10 +31,12 @@ module VX_alu_unit #(
     localparam BLOCK_SIZE   = `NUM_ALU_BLOCKS;
     localparam NUM_LANES    = `NUM_ALU_LANES;
     localparam PARTIAL_BW   = (BLOCK_SIZE != `ISSUE_WIDTH) || (NUM_LANES != `NUM_THREADS);
-    localparam PE_COUNT     = 1 + `EXT_M_ENABLED;
+    localparam PE_COUNT     = 1 + `EXT_M_ENABLED + `EXT_CUS_ENABLED; // For DOT8, PE_COUNT = 3
     localparam PE_SEL_BITS  = `CLOG2(PE_COUNT);
     localparam PE_IDX_INT   = 0;
     localparam PE_IDX_MDV   = PE_IDX_INT + `EXT_M_ENABLED;
+    localparam PE_IDX_DOT8  = PE_IDX_MDV + `EXT_CUS_ENABLED; // For DOT8
+
 
     VX_execute_if #(
         .NUM_LANES (NUM_LANES)
@@ -66,12 +68,21 @@ module VX_alu_unit #(
         ) pe_commit_if[PE_COUNT]();
 
         reg [`UP(PE_SEL_BITS)-1:0] pe_select;
+
+        // Set PE_SELECT
         always @(*) begin
-            pe_select = PE_IDX_INT;
-            if (`EXT_M_ENABLED && (per_block_execute_if[block_idx].data.op_args.alu.xtype == `ALU_TYPE_MULDIV))
-                pe_select = PE_IDX_MDV;
+            pe_select = PE_IDX_INT; // 0
+            if (`EXT_M_ENABLED && (per_block_execute_if[block_idx].data.op_args.alu.xtype == `ALU_TYPE_MULDIV)) begin
+                pe_select = PE_IDX_MDV; // 1
+            end
+            // DOT8
+            else if (`EXT_CUS_ENABLED && (per_block_execute_if[block_idx].data.op_args.alu.xtype == `ALU_TYPE_OTHER)) begin
+                pe_select = PE_IDX_DOT8; // 2
+            end
         end
 
+        // PE_SWITCH MODULE
+        // The PE switch routes the instruction to the appropriate execution unit
         VX_pe_switch #(
             .PE_COUNT    (PE_COUNT),
             .NUM_LANES   (NUM_LANES),
@@ -81,10 +92,10 @@ module VX_alu_unit #(
         ) pe_switch (
             .clk            (clk),
             .reset          (reset),
-            .pe_sel         (pe_select),
-            .execute_in_if  (per_block_execute_if[block_idx]),
+            .pe_sel         (pe_select), // used for selecting the PE e.g. 2 for DOT8
+            .execute_in_if  (per_block_execute_if[block_idx]), // Instruction to be executed
             .commit_out_if  (per_block_commit_if[block_idx]),
-            .execute_out_if (pe_execute_if),
+            .execute_out_if (pe_execute_if), // Outputs from the PE switch, pe_execute_if[2] is set for DOT8
             .commit_in_if   (pe_commit_if)
         );
 
@@ -109,6 +120,17 @@ module VX_alu_unit #(
             .reset      (reset),
             .execute_if (pe_execute_if[PE_IDX_MDV]),
             .commit_if  (pe_commit_if[PE_IDX_MDV])
+        );
+    `endif
+    `ifdef EXT_CUS_ENABLE // Added MACRO for DOT8 (CUS for CUSTOM)
+        VX_alu_dot8 #(
+            .INSTANCE_ID (`SFORMATF(("%s-dot8%0d", INSTANCE_ID, block_idx))),
+            .NUM_LANES (NUM_LANES)
+        ) dot8_unit (
+            .clk        (clk),
+            .reset      (reset),
+            .execute_if (pe_execute_if[PE_IDX_DOT8]), // Inputs to the DOT8 unit
+            .commit_if  (pe_commit_if[PE_IDX_DOT8]) // Outputs from the DOT8 unit
         );
     `endif
     end

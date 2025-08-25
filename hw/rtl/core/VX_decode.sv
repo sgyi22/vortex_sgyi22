@@ -489,9 +489,9 @@ module VX_decode import VX_gpu_pkg::*; #(
                 endcase
             end
         `endif
-            `INST_EXT1: begin
+            `INST_EXT1: begin // Custom Instruction: opcode 0x0B
                 case (func7)
-                    7'h00: begin
+                    7'h00: begin // TMC, WSPAWN, SPLIT, JOIN, BAR, PREDs
                         ex_type = `EX_SFU;
                         is_wstall = 1;
                         case (func3)
@@ -525,6 +525,24 @@ module VX_decode import VX_gpu_pkg::*; #(
                                 op_args.wctl.is_neg = rd[0];
                                 `USED_IREG (rs1);
                                 `USED_IREG (rs2);
+                            end
+                            default:;
+                        endcase
+                    end
+                    7'h01: begin  // DOT8: funct7 = 1
+                        case (func3) // DOT8: funct3 = 0
+                            3'h0: begin // DOT8
+                                ex_type = `EX_ALU;
+                                op_type = `INST_OP_BITS'(`INST_ALU_DOT8); // extends 3 bit to 4 bit width
+                                op_args.alu.xtype = `ALU_TYPE_OTHER; // DOT8 is a custom ALU operation
+                                op_args.alu.is_w = 0; // is_w = 0 means FULL XLEN-bit operation (needed for RV64I compatibility)
+                                // is_w = 1 means 32-bit word operation with sign extension (e.g. use lower 32 bits and sign-extend result)
+                                op_args.alu.use_PC = 0; // use_PC = 0 means NOT use PC
+                                op_args.alu.use_imm = 0; // use_imm = 0 means NOT use immediate
+                                use_rd = 1; // use_rd = 1 means YES write to rd
+                                `USED_IREG (rd); // rd is used as a register
+                                `USED_IREG (rs1); // rs1 is used as a register
+                                `USED_IREG (rs2); // rs2 is used as a register
                             end
                             default:;
                         endcase
